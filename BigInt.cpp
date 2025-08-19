@@ -313,6 +313,55 @@ struct BigInt
         return result;
     }
 
+    // Karatsuba multiplication
+    // static BigInt Kmul(const BigInt &x, const BigInt &y) {
+    //     if (x.is_zero() || y.is_zero())
+    //         return BigInt(0);
+
+    //     size_t n = std::max(x.chunks.size(), y.chunks.size());
+
+    //     // Use schoolbook for small numbers
+    //     if (n <= 16) {
+    //         BigInt result;
+    //         result.chunks.resize(x.chunks.size() + y.chunks.size(), 0);
+
+    //         for (size_t i = 0; i < x.chunks.size(); ++i) {
+    //             uint64_t carry = 0;
+    //             for (size_t j = 0; j < y.chunks.size(); ++j) {
+    //                 uint64_t cur = (uint64_t)result.chunks[i + j] +
+    //                                (uint64_t)x.chunks[i] * y.chunks[j] +
+    //                                carry;
+    //                 result.chunks[i + j] = (uint32_t)(cur & 0xFFFFFFFFu);
+    //                 carry = cur >> 32;
+    //             }
+    //             if (carry) result.chunks[i + y.chunks.size()] += (uint32_t)carry;
+    //         }
+    //         result.normalize();
+    //         return result;
+    //     }
+
+    //     size_t m = n / 2;
+
+    //     // Split x into x1 * B^m + x0
+    //     BigInt x0, x1;
+    //     x0.chunks.assign(x.chunks.begin(), x.chunks.begin() + std::min(m, x.chunks.size()));
+    //     if (x.chunks.size() > m)
+    //         x1.chunks.assign(x.chunks.begin() + m, x.chunks.end());
+
+    //     // Split y into y1 * B^m + y0
+    //     BigInt y0, y1;
+    //     y0.chunks.assign(y.chunks.begin(), y.chunks.begin() + std::min(m, y.chunks.size()));
+    //     if (y.chunks.size() > m)
+    //         y1.chunks.assign(y.chunks.begin() + m, y.chunks.end());
+
+    //     BigInt z0 = mul(x0, y0);
+    //     BigInt z2 = mul(x1, y1);
+    //     BigInt z1 = mul(add(x0, x1), add(y0, y1));
+    //     z1 = add(z1, BigInt(0) - add(z0, z2)); // z1 = (x0+x1)*(y0+y1) - z0 - z2
+
+    //     return add(add(z2.shlBits(2 * m * 32), z1.shlBits(m * 32)), z0);
+    // }
+
     // modulus operation; returns a % m (m>0)
     // static BigInt mod(BigInt a, const BigInt &m)
     // {
@@ -432,7 +481,13 @@ struct BigInt
     static BigInt modAdd(const BigInt &a, const BigInt &b, const BigInt &mod)
     {
         BigInt sum = BigInt::add(a, b);
-        return BigInt::modSafe(sum, mod);
+        // cout << "a + b = ";
+        // cout << "Hex: " << BigInt::to_hex(sum) << endl;
+        BigInt modVal = BigInt::modSafe(sum, mod);
+
+        // cout << "a + b (mod m) = ";
+        // cout << "Hex: " << BigInt::to_hex(modVal) << endl;
+        return modVal;
     }
 
     // helper: modular subtraction: (a - b) % m
@@ -457,7 +512,7 @@ struct BigInt
     static BigInt modMul(const BigInt &a, const BigInt &b, const BigInt &mod)
     {
         BigInt product = BigInt::mul(a, b);
-        return BigInt::mod(product, mod);
+        return BigInt::modSafe(product, mod);
     }
 
     // modular inverse using binary extended GCD
@@ -656,7 +711,7 @@ void testModularAddition()
 
     // print results
     cout << "\n=== Modular Addition Test ===\n";
-    printInputSummary1(a, b, m);
+    // printInputSummary1(a, b, m);
     cout << "(a + b) % m = ";
     cout << "Hex: " << BigInt::to_hex(r) << endl;
 }
@@ -671,9 +726,10 @@ void testModularMultiplication()
 
     // print results
     cout << "\n=== Modular Multiplication Test ===\n";
-    printInputSummary1(a, b, m);
+    // printInputSummary1(a, b, m);
     cout << "(a * b) % m = ";
-    printNumber(r);
+    cout << "Hex: " << BigInt::to_hex(r) << endl;
+    // printNumber(r);
 }
 
 void testModularInverse()
@@ -688,12 +744,24 @@ void testModularInverse()
         cout << "\n=== Modular Inverse Test ===\n";
         printInputSummary2(a, m);
         cout << "a^-1 mod m = ";
-        printNumber(inv);
+        // printNumber(inv);
+        cout << "Hex: " << BigInt::to_hex(inv) << endl;
     }
     catch (const runtime_error &e)
     {
         cout << e.what() << endl;
     }
+}
+
+void testNormalAddition()
+{
+    cout << "\n=== Normal Addition Test ===\n";
+    BigInt a = inputNumber("Enter number a");
+    BigInt b = inputNumber("Enter number b");
+    BigInt r = BigInt::add(a, b);
+    cout << "a + b = ";
+    cout << "Hex: " << BigInt::to_hex(r) << endl;
+    cout << "Decimal: " << BigInt::to_decimal(r) << endl;
 }
 
 // ---------------- Main Menu ----------------
@@ -708,6 +776,7 @@ int main()
         cout << "3. Modular Addition ((a+b) % m)\n";
         cout << "4. Modular Multiplication ((a*b) % m)\n";
         cout << "5. Modular Inverse (a^-1 mod m)\n";
+        cout << "6. Normal Addition (a + b)\n";
         cout << "0. Exit\n";
         cout << "Enter choice: ";
         cin >> choice;
@@ -727,6 +796,9 @@ int main()
             break;
         case 5:
             testModularInverse();
+            break;
+        case 6:
+            testNormalAddition();
             break;
         case 0:
             cout << "Exiting.\n";
