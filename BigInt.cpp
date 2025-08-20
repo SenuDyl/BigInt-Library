@@ -16,8 +16,8 @@ struct BigInt
     {
         while (value > 0)
         {
-            chunks.push_back((uint32_t)(value & 0xFFFFFFFFu)); // Store lower 32 bits
-            value >>= 32;                                      // Drop those 32 bits
+            chunks.push_back((uint32_t)(value & 0xFFFFFFFFu)); 
+            value >>= 32;                                      
         }
         normalize();
     }
@@ -104,6 +104,36 @@ struct BigInt
         return result;
     }
 
+    static string to_decimal_Optimized(const BigInt &x)
+    {
+        if (x.is_zero())
+            return "0";
+
+        const uint32_t DEC_BASE = 1000000000; // 1e9
+        BigInt temp = x;
+        vector<uint32_t> decimal_chunks;
+
+        // Repeatedly divide by 1e9 instead of 10
+        while (!temp.is_zero())
+        {
+            BigInt q, r;
+            r = divideWithRemainder(temp, BigInt(DEC_BASE), q);
+            decimal_chunks.push_back(r.chunks.empty() ? 0 : r.chunks[0]);
+            temp = q;
+        }
+
+        // Convert chunks to string
+        string result = to_string(decimal_chunks.back()); // Most significant chunk
+        for (int i = (int)decimal_chunks.size() - 2; i >= 0; --i)
+        {
+            string part = to_string(decimal_chunks[i]);
+            // Pad with leading zeros to maintain 9 digits
+            result += string(9 - part.length(), '0') + part;
+        }
+
+        return result;
+    }
+
     // Convert BigInt to decimal string
     static string to_decimal(const BigInt &x)
     {
@@ -164,11 +194,11 @@ struct BigInt
         uint64_t carry = 0;
         for (size_t i = 0; i < n; ++i)
         {
-            uint64_t a_limb = (i < a.chunks.size() ? a.chunks[i] : 0);
-            uint64_t b_limb = (i < b.chunks.size() ? b.chunks[i] : 0);
-            uint64_t sum = a_limb + b_limb + carry;
+            uint64_t a_chunk = (i < a.chunks.size() ? a.chunks[i] : 0);
+            uint64_t b_chunk = (i < b.chunks.size() ? b.chunks[i] : 0);
+            uint64_t sum = a_chunk + b_chunk + carry;
             result.chunks[i] = (uint32_t)(sum & 0xFFFFFFFFu);
-            carry = sum >> 32; // Get the carry for the next limb
+            carry = sum >> 32; // Get the carry for the next chunk
         }
         if (carry)
         {
@@ -190,9 +220,9 @@ struct BigInt
         int64_t borrow = 0;
         for (size_t i = 0; i < a.chunks.size(); ++i)
         {
-            int64_t a_limb = (i < a.chunks.size() ? a.chunks[i] : 0);
-            int64_t b_limb = (i < b.chunks.size() ? b.chunks[i] : 0);
-            int64_t diff = a_limb - b_limb + borrow;
+            int64_t a_chunk = (i < a.chunks.size() ? a.chunks[i] : 0);
+            int64_t b_chunk = (i < b.chunks.size() ? b.chunks[i] : 0);
+            int64_t diff = a_chunk - b_chunk + borrow;
             if (diff < 0)
             {
                 diff += (1LL << 32);
@@ -288,12 +318,12 @@ struct BigInt
         for (size_t i = 0; i < a.chunks.size(); ++i)
         {
             uint64_t carry = 0;
-            uint64_t a_limb = a.chunks[i];
+            uint64_t a_chunk = a.chunks[i];
 
             for (size_t j = 0; j < b.chunks.size(); ++j)
             {
                 uint64_t cur = (uint64_t)result.chunks[i + j] +
-                               a_limb * (uint64_t)b.chunks[j] +
+                               a_chunk * (uint64_t)b.chunks[j] +
                                carry;
                 result.chunks[i + j] = (uint32_t)(cur & 0xFFFFFFFFu);
                 carry = cur >> 32;
@@ -312,79 +342,6 @@ struct BigInt
         result.normalize();
         return result;
     }
-
-    // Karatsuba multiplication
-    // static BigInt Kmul(const BigInt &x, const BigInt &y) {
-    //     if (x.is_zero() || y.is_zero())
-    //         return BigInt(0);
-
-    //     size_t n = std::max(x.chunks.size(), y.chunks.size());
-
-    //     // Use schoolbook for small numbers
-    //     if (n <= 16) {
-    //         BigInt result;
-    //         result.chunks.resize(x.chunks.size() + y.chunks.size(), 0);
-
-    //         for (size_t i = 0; i < x.chunks.size(); ++i) {
-    //             uint64_t carry = 0;
-    //             for (size_t j = 0; j < y.chunks.size(); ++j) {
-    //                 uint64_t cur = (uint64_t)result.chunks[i + j] +
-    //                                (uint64_t)x.chunks[i] * y.chunks[j] +
-    //                                carry;
-    //                 result.chunks[i + j] = (uint32_t)(cur & 0xFFFFFFFFu);
-    //                 carry = cur >> 32;
-    //             }
-    //             if (carry) result.chunks[i + y.chunks.size()] += (uint32_t)carry;
-    //         }
-    //         result.normalize();
-    //         return result;
-    //     }
-
-    //     size_t m = n / 2;
-
-    //     // Split x into x1 * B^m + x0
-    //     BigInt x0, x1;
-    //     x0.chunks.assign(x.chunks.begin(), x.chunks.begin() + std::min(m, x.chunks.size()));
-    //     if (x.chunks.size() > m)
-    //         x1.chunks.assign(x.chunks.begin() + m, x.chunks.end());
-
-    //     // Split y into y1 * B^m + y0
-    //     BigInt y0, y1;
-    //     y0.chunks.assign(y.chunks.begin(), y.chunks.begin() + std::min(m, y.chunks.size()));
-    //     if (y.chunks.size() > m)
-    //         y1.chunks.assign(y.chunks.begin() + m, y.chunks.end());
-
-    //     BigInt z0 = mul(x0, y0);
-    //     BigInt z2 = mul(x1, y1);
-    //     BigInt z1 = mul(add(x0, x1), add(y0, y1));
-    //     z1 = add(z1, BigInt(0) - add(z0, z2)); // z1 = (x0+x1)*(y0+y1) - z0 - z2
-
-    //     return add(add(z2.shlBits(2 * m * 32), z1.shlBits(m * 32)), z0);
-    // }
-
-    // modulus operation; returns a % m (m>0)
-    // static BigInt mod(BigInt a, const BigInt &m)
-    // {
-    //     if (m.is_zero())
-    //     {
-    //         throw runtime_error("Modulus by zero is undefined");
-    //     }
-    //     if (a.compare(a, m) < 0)
-    //         return a;
-    //     size_t m_bits = m.bitLength();
-    //     while (a.compare(a, m) >= 0)
-    //     {
-    //         size_t a_bits = a.bitLength();
-    //         size_t shift = (a_bits > m_bits) ? (a_bits - m_bits) : 0;
-    //         BigInt m_shifted = m.shlBits(shift);
-    //         if (a.compare(a, m_shifted) < 0)
-    //         {
-    //             m_shifted = m.shlBits(shift - 1);
-    //         }
-    //         a = BigInt::subtract(a, m_shifted);
-    //     }
-    //     return a;
-    // }
 
     static BigInt mod(const BigInt &a, const BigInt &m)
     {
@@ -421,32 +378,6 @@ struct BigInt
         return res;
     }
 
-    static BigInt modMoreSafe(const BigInt &a, const BigInt &m)
-    {
-        if (compare(a, m) < 0)
-            return a; // already less than modulus
-
-        BigInt remainder; // start at zero
-
-        // Process each chunk from most significant to least
-        for (int i = (int)a.chunks.size() - 1; i >= 0; --i)
-        {
-            // remainder = remainder * 2^32 + next_chunk
-            remainder = remainder.shlBits(32);
-            remainder = add(remainder, BigInt(a.chunks[i]));
-
-            // Instead of repeated subtraction, use division once
-            if (compare(remainder, m) >= 0)
-            {
-                // Compute remainder = remainder % m using long division
-                BigInt q; // quotient, not needed
-                remainder = divideWithRemainder(remainder, m, q);
-            }
-        }
-
-        return remainder;
-    }
-
     // Helper: divide a by b, return remainder, also sets quotient q
     static BigInt divideWithRemainder(const BigInt &a, const BigInt &b, BigInt &q)
     {
@@ -481,12 +412,7 @@ struct BigInt
     static BigInt modAdd(const BigInt &a, const BigInt &b, const BigInt &mod)
     {
         BigInt sum = BigInt::add(a, b);
-        // cout << "a + b = ";
-        // cout << "Hex: " << BigInt::to_hex(sum) << endl;
         BigInt modVal = BigInt::modSafe(sum, mod);
-
-        // cout << "a + b (mod m) = ";
-        // cout << "Hex: " << BigInt::to_hex(modVal) << endl;
         return modVal;
     }
 
@@ -513,6 +439,13 @@ struct BigInt
     {
         BigInt product = BigInt::mul(a, b);
         return BigInt::modSafe(product, mod);
+    }
+
+    static BigInt modFast(const BigInt &a, const BigInt &m)
+    {
+        BigInt q;
+        BigInt r = divideWithRemainder(a, m, q);
+        return r;
     }
 
     // modular inverse using binary extended GCD
@@ -609,19 +542,6 @@ void printNumber(const BigInt &n)
     cout << "Hex:     " << BigInt::to_hex(n) << endl;
 }
 
-void printInputSummary1(const BigInt &a, const BigInt &b, const BigInt &m)
-{
-    cout << "a = " << BigInt::to_decimal(a) << endl;
-    cout << "b = " << BigInt::to_decimal(b) << endl;
-    cout << "m = " << BigInt::to_decimal(m) << endl;
-}
-
-void printInputSummary2(const BigInt &a, const BigInt &m)
-{
-    cout << "a = " << BigInt::to_decimal(a) << endl;
-    cout << "m = " << BigInt::to_decimal(m) << endl;
-}
-
 void printChunks(const BigInt &n)
 {
     for (size_t i = 0; i < n.chunks.size(); ++i)
@@ -643,7 +563,7 @@ BigInt generateModulus(size_t n_bits)
     if (extra_bits > 0)
     {
         result.chunks.back() &= ((1u << (32 - extra_bits)) - 1);
-        result.chunks.back() |= (1u << (31 - extra_bits)); // ensure n-bit number
+        result.chunks.back() |= (1u << (31 - extra_bits));
     }
     result.normalize();
     return result;
@@ -695,6 +615,7 @@ void testModularReduction()
     BigInt r = BigInt::modSafe(a, m);
     cout << "a % m = ";
     cout << "Hex: " << BigInt::to_hex(r) << endl;
+    cout << "Decimal: " << BigInt::to_decimal_Optimized(r) << endl;
 }
 
 void testModularAddition()
@@ -709,11 +630,10 @@ void testModularAddition()
     // perform modular addition
     BigInt r = BigInt::modAdd(a, b, m);
 
-    // print results
     cout << "\n=== Modular Addition Test ===\n";
-    // printInputSummary1(a, b, m);
     cout << "(a + b) % m = ";
     cout << "Hex: " << BigInt::to_hex(r) << endl;
+    cout << "Decimal: " << BigInt::to_decimal_Optimized(r) << endl;
 }
 
 void testModularMultiplication()
@@ -724,12 +644,9 @@ void testModularMultiplication()
     BigInt m = getModulusInteractive();
     BigInt r = BigInt::modMul(a, b, m);
 
-    // print results
-    cout << "\n=== Modular Multiplication Test ===\n";
-    // printInputSummary1(a, b, m);
     cout << "(a * b) % m = ";
     cout << "Hex: " << BigInt::to_hex(r) << endl;
-    // printNumber(r);
+    cout << "Decimal: " << BigInt::to_decimal_Optimized(r) << endl;
 }
 
 void testModularInverse()
@@ -737,20 +654,11 @@ void testModularInverse()
     cout << "\n=== Modular Inverse Test ===\n";
     BigInt a = inputNumber("Enter number a");
     BigInt m = getModulusInteractive();
-
-    try
-    {
-        BigInt inv = BigInt::modInverse(a, m);
-        cout << "\n=== Modular Inverse Test ===\n";
-        printInputSummary2(a, m);
-        cout << "a^-1 mod m = ";
-        // printNumber(inv);
-        cout << "Hex: " << BigInt::to_hex(inv) << endl;
-    }
-    catch (const runtime_error &e)
-    {
-        cout << e.what() << endl;
-    }
+    BigInt inv = BigInt::modInverse(a, m);
+    cout << "\n=== Modular Inverse Test ===\n";
+    cout << "a^-1 mod m = ";
+    cout << "Hex: " << BigInt::to_hex(inv) << endl;
+    cout << "Decimal: " << BigInt::to_decimal_Optimized(inv) << endl;
 }
 
 void testNormalAddition()
