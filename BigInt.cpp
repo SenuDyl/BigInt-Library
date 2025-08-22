@@ -98,8 +98,8 @@ struct BigInt
             if (c < '0' || c > '9')
                 continue;
             int digit = c - '0';
-            result = BigInt::mul(result, BigInt(10));    // result *= 10
-            result = BigInt::add(result, BigInt(digit)); // result += digit
+            result = BigInt::mul(result, BigInt(10));    
+            result = BigInt::add(result, BigInt(digit));
         }
         return result;
     }
@@ -109,7 +109,7 @@ struct BigInt
         if (x.is_zero())
             return "0";
 
-        const uint32_t DEC_BASE = 1000000000; // 1e9
+        const uint32_t DEC_BASE = 1000000000;
         BigInt temp = x;
         vector<uint32_t> decimal_chunks;
 
